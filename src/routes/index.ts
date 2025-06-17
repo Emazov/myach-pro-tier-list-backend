@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import userRoutes from './userRoutes';
+import telegramRoutes from './telegramRoutes';
 
 const router = Router();
 
@@ -10,5 +11,8 @@ router.get('/health', (req, res) => {
 
 // Маршруты пользователя
 router.use('/users', userRoutes);
+
+// Маршруты Telegram
+router.use('/telegram', telegramRoutes);
 
 export default router;
