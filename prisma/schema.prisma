@@ -15,15 +15,18 @@ model TelegramUser {
     createdAt  DateTime @default(now()) @map("created_at")
     updatedAt  DateTime @updatedAt @map("updated_at")
 
+    // Связь с голосованием
+    votes PlayerVote[]
+
     @@map("telegram_users")
 }
 
 // Модель выпуска (релиза)
 model Release {
-    id          Int      @id @default(autoincrement())
-    name        String
-    createdAt   DateTime @default(now()) @map("created_at")
-    updatedAt   DateTime @updatedAt @map("updated_at")
+    id        Int      @id @default(autoincrement())
+    name      String
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
 
     // Информация о логотипе
     logoKey         String? @map("logo_key")
@@ -38,10 +41,10 @@ model Release {
 
 // Модель игрока
 model Player {
-    id          Int      @id @default(autoincrement())
-    name        String
-    createdAt   DateTime @default(now()) @map("created_at")
-    updatedAt   DateTime @updatedAt @map("updated_at")
+    id        Int      @id @default(autoincrement())
+    name      String
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
 
     // Связь с выпуском
     releaseId Int     @map("release_id")
@@ -52,5 +55,48 @@ model Player {
     photoFilename    String? @map("photo_filename")
     photoContentType String? @map("photo_content_type")
 
+    // Связь с голосованием
+    votes PlayerVote[]
+
     @@map("players")
+}
+
+// Модель категорий для голосования
+model PlayerCategory {
+    id          Int      @id @default(autoincrement())
+    name        String   @unique
+    title       String
+    description String?
+    maxPlaces   Int      @map("max_places")
+    sortOrder   Int      @map("sort_order")
+    createdAt   DateTime @default(now()) @map("created_at")
+    updatedAt   DateTime @updatedAt @map("updated_at")
+
+    // Связь с голосами
+    votes PlayerVote[]
+
+    @@map("player_categories")
+}
+
+// Модель голосования за игроков
+model PlayerVote {
+    id        Int      @id @default(autoincrement())
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+
+    // Связь с игроком
+    playerId Int    @map("player_id")
+    player   Player @relation(fields: [playerId], references: [id])
+
+    // Связь с пользователем
+    userId Int          @map("user_id")
+    user   TelegramUser @relation(fields: [userId], references: [id])
+
+    // Связь с категорией
+    categoryId Int            @map("category_id")
+    category   PlayerCategory @relation(fields: [categoryId], references: [id])
+
+    // Уникальность: один игрок - один голос от пользователя
+    @@unique([playerId, userId])
+    @@map("player_votes")
 }

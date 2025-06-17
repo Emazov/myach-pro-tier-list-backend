@@ -7,7 +7,6 @@ async function main() {
 	console.log('🌱 Начало заполнения базы данных...');
 
 	// Очищаем таблицу перед заполнением
-	await prisma.file.deleteMany({});
 	await prisma.telegramUser.deleteMany({});
 
 	console.log('Данные очищены');
@@ -16,18 +15,12 @@ async function main() {
 	const telegramUser1 = await prisma.telegramUser.create({
 		data: {
 			telegramId: BigInt(123456789),
-			username: 'test_user1',
-			firstName: 'Test',
-			lastName: 'User',
 		},
 	});
 
 	const telegramUser2 = await prisma.telegramUser.create({
 		data: {
 			telegramId: BigInt(987654321),
-			username: 'test_user2',
-			firstName: 'Demo',
-			lastName: 'Account',
 		},
 	});
 
