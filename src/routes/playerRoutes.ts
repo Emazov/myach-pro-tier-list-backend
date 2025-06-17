@@ -1,7 +1,10 @@
-import express from 'express';
+import { Router } from 'express';
+import multer from 'multer';
 import { playerController } from '../controllers/playerController';
 
-const router = express.Router();
+const router = Router();
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
 // Получение всех игроков
 router.get('/', playerController.getAllPlayers);
@@ -9,13 +12,13 @@ router.get('/', playerController.getAllPlayers);
 // Получение игрока по ID
 router.get('/:id', playerController.getPlayerById);
 
-// Создание нового игрока (только для админа)
-router.post('/', playerController.createPlayer);
+// Создание нового игрока (с возможностью загрузки фотографии)
+router.post('/', upload.single('photo'), playerController.createPlayer);
 
-// Обновление игрока (только для админа)
-router.put('/:id', playerController.updatePlayer);
+// Обновление игрока (с возможностью загрузки фотографии)
+router.put('/:id', upload.single('photo'), playerController.updatePlayer);
 
-// Удаление игрока (только для админа)
+// Удаление игрока
 router.delete('/:id', playerController.deletePlayer);
 
 export default router;

@@ -1,223 +1,138 @@
 import { Request, Response } from 'express';
 import { playerService } from '../services/playerService';
-import { fileService } from '../services/fileService';
+import { storageService } from '../services/storageService';
 
 export interface PlayerRequest extends Request {
 	body: {
-		name?: string;
-		position?: string;
-		number?: number | string;
-		description?: string;
-		photoFileId?: number | string;
-		releaseId?: number | string;
-		telegramId?: string | number;
+		name: string;
+		photoFileId: number;
+		releaseId: number;
+		telegramId: number;
 	};
 }
 
-export const playerController = {
+class PlayerController {
 	// Получение всех игроков
-	async getAllPlayers(req: Request, res: Response): Promise<void> {
+	async getAllPlayers(req: Request, res: Response) {
 		try {
 			const players = await playerService.getAllPlayers();
 			res.status(200).json(players);
 		} catch (error: any) {
-			console.error('Ошибка при получении игроков:', error);
-			res.status(500).json({ error: 'Не удалось получить игроков' });
+			res.status(500).json({ error: error.message });
 		}
-	},
+	}
 
 	// Получение игрока по ID
-	async getPlayerById(req: Request, res: Response): Promise<void> {
+	async getPlayerById(req: Request, res: Response) {
 		try {
-			const id = parseInt(req.params.id);
+			const playerId = parseInt(req.params.id);
 
-			if (isNaN(id)) {
-				res.status(400).json({ error: 'ID должен быть числом' });
-				return;
-			}
-
-			const player = await playerService.getPlayerById(id);
+			const player = await playerService.getPlayerById(playerId);
 
 			if (!player) {
-				res.status(404).json({ error: 'Игрок не найден' });
-				return;
+				return res.status(404).json({ error: 'Игрок не найден' });
 			}
 
 			res.status(200).json(player);
 		} catch (error: any) {
-			console.error('Ошибка при получении игрока:', error);
-			res.status(500).json({ error: 'Не удалось получить игрока' });
+			res.status(500).json({ error: error.message });
 		}
-	},
+	}
 
-	// Создание нового игрока (только для администратора)
-	async createPlayer(req: PlayerRequest, res: Response): Promise<void> {
+	// Создание нового игрока
+	async createPlayer(req: Request, res: Response) {
 		try {
-			const {
+			const telegramId = req.body.telegramId;
+
+			// Проверяем права администратора
+			const isAdmin = await storageService.isAdmin(telegramId);
+			if (!isAdmin) {
+				return res.status(403).json({ error: 'Доступ запрещен' });
+			}
+
+			// Получаем данные из формы
+			const { name, releaseId } = req.body;
+			const photoFile = req.file;
+
+			// Проверяем обязательные поля
+			if (!name || !releaseId) {
+				return res.status(400).json({
+					error: 'Не указаны обязательные поля: name, releaseId',
+				});
+			}
+
+			const playerData = {
 				name,
-				position,
-				number,
-				description,
-				photoFileId,
-				releaseId,
-				telegramId,
-			} = req.body;
+				releaseId: parseInt(releaseId),
+				...(photoFile && {
+					photo: {
+						buffer: photoFile.buffer,
+						originalname: photoFile.originalname,
+						mimetype: photoFile.mimetype,
+					},
+				}),
+			};
 
-			if (!telegramId) {
-				res
-					.status(403)
-					.json({ error: 'Требуется идентификатор пользователя Telegram' });
-				return;
-			}
-
-			// Проверка прав администратора
-			try {
-				const isAdmin = await fileService.isAdmin(telegramId);
-				if (!isAdmin) {
-					res
-						.status(403)
-						.json({ error: 'Недостаточно прав для создания игроков' });
-					return;
-				}
-			} catch (error) {
-				res.status(403).json({ error: 'Ошибка при проверке прав доступа' });
-				return;
-			}
-
-			// Проверяем наличие обязательных полей
-			if (!name) {
-				res.status(400).json({ error: 'Имя игрока обязательно' });
-				return;
-			}
-
-			if (!releaseId) {
-				res.status(400).json({ error: 'ID релиза обязателен' });
-				return;
-			}
-
-			const player = await playerService.createPlayer({
-				name,
-				position,
-				number: number !== undefined ? parseInt(number.toString()) : undefined,
-				description,
-				photoFileId: photoFileId ? parseInt(photoFileId.toString()) : undefined,
-				releaseId: parseInt(releaseId.toString()),
-			});
-
+			const player = await playerService.createPlayer(playerData);
 			res.status(201).json(player);
 		} catch (error: any) {
-			console.error('Ошибка при создании игрока:', error);
-
-			if (
-				error.message?.includes('не найден') ||
-				error.message?.includes('максимальное количество игроков')
-			) {
-				res.status(400).json({ error: error.message });
-				return;
-			}
-
-			res.status(500).json({ error: 'Не удалось создать игрока' });
+			res.status(500).json({ error: error.message });
 		}
-	},
+	}
 
-	// Обновление игрока (только для администратора)
-	async updatePlayer(req: PlayerRequest, res: Response): Promise<void> {
+	// Обновление игрока
+	async updatePlayer(req: Request, res: Response) {
 		try {
-			const id = parseInt(req.params.id);
-			const { name, position, number, description, photoFileId, telegramId } =
-				req.body;
+			const telegramId = req.body.telegramId;
 
-			if (isNaN(id)) {
-				res.status(400).json({ error: 'ID должен быть числом' });
-				return;
+			// Проверяем права администратора
+			const isAdmin = await storageService.isAdmin(telegramId);
+			if (!isAdmin) {
+				return res.status(403).json({ error: 'Доступ запрещен' });
 			}
 
-			if (!telegramId) {
-				res
-					.status(403)
-					.json({ error: 'Требуется идентификатор пользователя Telegram' });
-				return;
-			}
+			const playerId = parseInt(req.params.id);
+			const { name, removePhoto } = req.body;
+			const photoFile = req.file;
 
-			// Проверка прав администратора
-			try {
-				const isAdmin = await fileService.isAdmin(telegramId);
-				if (!isAdmin) {
-					res
-						.status(403)
-						.json({ error: 'Недостаточно прав для обновления игроков' });
-					return;
-				}
-			} catch (error) {
-				res.status(403).json({ error: 'Ошибка при проверке прав доступа' });
-				return;
-			}
+			const playerData = {
+				...(name !== undefined && { name }),
+				...(removePhoto === 'true' && { removePhoto: true }),
+				...(photoFile && {
+					photo: {
+						buffer: photoFile.buffer,
+						originalname: photoFile.originalname,
+						mimetype: photoFile.mimetype,
+					},
+				}),
+			};
 
-			const player = await playerService.updatePlayer(id, {
-				name,
-				position,
-				number: number !== undefined ? parseInt(number.toString()) : undefined,
-				description,
-				photoFileId: photoFileId ? parseInt(photoFileId.toString()) : undefined,
-			});
-
+			const player = await playerService.updatePlayer(playerId, playerData);
 			res.status(200).json(player);
 		} catch (error: any) {
-			console.error('Ошибка при обновлении игрока:', error);
-
-			if (error.message?.includes('не найден')) {
-				res.status(404).json({ error: error.message });
-				return;
-			}
-
-			res.status(500).json({ error: 'Не удалось обновить игрока' });
+			res.status(500).json({ error: error.message });
 		}
-	},
+	}
 
-	// Удаление игрока (только для администратора)
-	async deletePlayer(req: Request, res: Response): Promise<void> {
+	// Удаление игрока
+	async deletePlayer(req: Request, res: Response) {
 		try {
-			const id = parseInt(req.params.id);
-			const telegramId = req.query.telegramId;
+			const telegramId = req.body.telegramId;
 
-			if (isNaN(id)) {
-				res.status(400).json({ error: 'ID должен быть числом' });
-				return;
+			// Проверяем права администратора
+			const isAdmin = await storageService.isAdmin(telegramId);
+			if (!isAdmin) {
+				return res.status(403).json({ error: 'Доступ запрещен' });
 			}
 
-			if (!telegramId || Array.isArray(telegramId)) {
-				res
-					.status(403)
-					.json({ error: 'Требуется идентификатор пользователя Telegram' });
-				return;
-			}
+			const playerId = parseInt(req.params.id);
 
-			// Проверка прав администратора
-			try {
-				const isAdmin = await fileService.isAdmin(telegramId.toString());
-				if (!isAdmin) {
-					res
-						.status(403)
-						.json({ error: 'Недостаточно прав для удаления игроков' });
-					return;
-				}
-			} catch (error) {
-				res.status(403).json({ error: 'Ошибка при проверке прав доступа' });
-				return;
-			}
-
-			await playerService.deletePlayer(id);
-
-			res.status(204).end();
+			await playerService.deletePlayer(playerId);
+			res.status(200).json({ message: 'Игрок успешно удален' });
 		} catch (error: any) {
-			console.error('Ошибка при удалении игрока:', error);
-
-			if (error.message?.includes('не найден')) {
-				res.status(404).json({ error: error.message });
-				return;
-			}
-
-			res.status(500).json({ error: 'Не удалось удалить игрока' });
+			res.status(500).json({ error: error.message });
 		}
-	},
-};
+	}
+}
+
+export const playerController = new PlayerController();

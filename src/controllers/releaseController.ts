@@ -1,223 +1,145 @@
 import { Request, Response } from 'express';
 import { releaseService } from '../services/releaseService';
-import { fileService } from '../services/fileService';
+import { storageService } from '../services/storageService';
 
 export interface ReleaseRequest extends Request {
 	body: {
-		name?: string;
-		description?: string;
-		logoFileId?: number;
-		telegramId?: string | number;
+		name: string;
+		logoFileId: number;
+		telegramId: number;
 	};
 }
 
-export const releaseController = {
+class ReleaseController {
 	// Получение всех релизов
-	async getAllReleases(req: Request, res: Response): Promise<void> {
+	async getAllReleases(req: Request, res: Response) {
 		try {
 			const releases = await releaseService.getAllReleases();
 			res.status(200).json(releases);
 		} catch (error: any) {
-			console.error('Ошибка при получении релизов:', error);
-			res.status(500).json({ error: 'Не удалось получить релизы' });
+			res.status(500).json({ error: error.message });
 		}
-	},
+	}
 
 	// Получение релиза по ID
-	async getReleaseById(req: Request, res: Response): Promise<void> {
+	async getReleaseById(req: Request, res: Response) {
 		try {
-			const id = parseInt(req.params.id);
-
-			if (isNaN(id)) {
-				res.status(400).json({ error: 'ID должен быть числом' });
-				return;
-			}
-
-			const release = await releaseService.getReleaseById(id);
+			const releaseId = parseInt(req.params.id);
+			const release = await releaseService.getReleaseById(releaseId);
 
 			if (!release) {
-				res.status(404).json({ error: 'Релиз не найден' });
-				return;
+				return res.status(404).json({ error: 'Релиз не найден' });
 			}
 
 			res.status(200).json(release);
 		} catch (error: any) {
-			console.error('Ошибка при получении релиза:', error);
-			res.status(500).json({ error: 'Не удалось получить релиз' });
+			res.status(500).json({ error: error.message });
 		}
-	},
+	}
 
-	// Создание нового релиза (только для администратора)
-	async createRelease(req: ReleaseRequest, res: Response): Promise<void> {
+	// Создание нового релиза
+	async createRelease(req: Request, res: Response) {
 		try {
-			const { name, description, logoFileId, telegramId } = req.body;
+			const telegramId = req.body.telegramId;
 
-			if (!telegramId) {
-				res
-					.status(403)
-					.json({ error: 'Требуется идентификатор пользователя Telegram' });
-				return;
+			// Проверяем права администратора
+			const isAdmin = await storageService.isAdmin(telegramId);
+			if (!isAdmin) {
+				return res.status(403).json({ error: 'Доступ запрещен' });
 			}
 
-			// Проверка прав администратора
-			try {
-				const isAdmin = await fileService.isAdmin(telegramId);
-				if (!isAdmin) {
-					res
-						.status(403)
-						.json({ error: 'Недостаточно прав для создания релизов' });
-					return;
-				}
-			} catch (error) {
-				res.status(403).json({ error: 'Ошибка при проверке прав доступа' });
-				return;
-			}
+			// Получаем данные из формы
+			const { name, description } = req.body;
+			const logoFile = req.file;
 
-			// Проверяем наличие обязательных полей
-			if (!name) {
-				res.status(400).json({ error: 'Название релиза обязательно' });
-				return;
-			}
-
-			const release = await releaseService.createRelease({
+			const releaseData = {
 				name,
 				description,
-				logoFileId: logoFileId ? parseInt(logoFileId.toString()) : undefined,
-			});
+				...(logoFile && {
+					logo: {
+						buffer: logoFile.buffer,
+						originalname: logoFile.originalname,
+						mimetype: logoFile.mimetype,
+					},
+				}),
+			};
 
+			const release = await releaseService.createRelease(releaseData);
 			res.status(201).json(release);
 		} catch (error: any) {
-			console.error('Ошибка при создании релиза:', error);
-
-			if (error.message?.includes('не найден')) {
-				res.status(404).json({ error: error.message });
-				return;
-			}
-
-			res.status(500).json({ error: 'Не удалось создать релиз' });
+			res.status(500).json({ error: error.message });
 		}
-	},
+	}
 
-	// Обновление релиза (только для администратора)
-	async updateRelease(req: ReleaseRequest, res: Response): Promise<void> {
+	// Обновление релиза
+	async updateRelease(req: Request, res: Response) {
 		try {
-			const id = parseInt(req.params.id);
-			const { name, description, logoFileId, telegramId } = req.body;
+			const telegramId = req.body.telegramId;
 
-			if (isNaN(id)) {
-				res.status(400).json({ error: 'ID должен быть числом' });
-				return;
+			// Проверяем права администратора
+			const isAdmin = await storageService.isAdmin(telegramId);
+			if (!isAdmin) {
+				return res.status(403).json({ error: 'Доступ запрещен' });
 			}
 
-			if (!telegramId) {
-				res
-					.status(403)
-					.json({ error: 'Требуется идентификатор пользователя Telegram' });
-				return;
-			}
+			const releaseId = parseInt(req.params.id);
+			const { name, description, removeLogo } = req.body;
+			const logoFile = req.file;
 
-			// Проверка прав администратора
-			try {
-				const isAdmin = await fileService.isAdmin(telegramId);
-				if (!isAdmin) {
-					res
-						.status(403)
-						.json({ error: 'Недостаточно прав для обновления релизов' });
-					return;
-				}
-			} catch (error) {
-				res.status(403).json({ error: 'Ошибка при проверке прав доступа' });
-				return;
-			}
+			const releaseData = {
+				...(name !== undefined && { name }),
+				...(description !== undefined && { description }),
+				...(removeLogo === 'true' && { removeLogo: true }),
+				...(logoFile && {
+					logo: {
+						buffer: logoFile.buffer,
+						originalname: logoFile.originalname,
+						mimetype: logoFile.mimetype,
+					},
+				}),
+			};
 
-			const release = await releaseService.updateRelease(id, {
-				name,
-				description,
-				logoFileId: logoFileId ? parseInt(logoFileId.toString()) : undefined,
-			});
-
+			const release = await releaseService.updateRelease(
+				releaseId,
+				releaseData,
+			);
 			res.status(200).json(release);
 		} catch (error: any) {
-			console.error('Ошибка при обновлении релиза:', error);
-
-			if (error.message?.includes('не найден')) {
-				res.status(404).json({ error: error.message });
-				return;
-			}
-
-			res.status(500).json({ error: 'Не удалось обновить релиз' });
+			res.status(500).json({ error: error.message });
 		}
-	},
+	}
 
-	// Удаление релиза (только для администратора)
-	async deleteRelease(req: Request, res: Response): Promise<void> {
+	// Удаление релиза
+	async deleteRelease(req: Request, res: Response) {
 		try {
-			const id = parseInt(req.params.id);
-			const telegramId = req.query.telegramId;
+			const telegramId = req.body.telegramId;
 
-			if (isNaN(id)) {
-				res.status(400).json({ error: 'ID должен быть числом' });
-				return;
+			// Проверяем права администратора
+			const isAdmin = await storageService.isAdmin(telegramId);
+			if (!isAdmin) {
+				return res.status(403).json({ error: 'Доступ запрещен' });
 			}
 
-			if (!telegramId || Array.isArray(telegramId)) {
-				res
-					.status(403)
-					.json({ error: 'Требуется идентификатор пользователя Telegram' });
-				return;
-			}
+			const releaseId = parseInt(req.params.id);
 
-			// Проверка прав администратора
-			try {
-				const isAdmin = await fileService.isAdmin(telegramId.toString());
-				if (!isAdmin) {
-					res
-						.status(403)
-						.json({ error: 'Недостаточно прав для удаления релизов' });
-					return;
-				}
-			} catch (error) {
-				res.status(403).json({ error: 'Ошибка при проверке прав доступа' });
-				return;
-			}
-
-			await releaseService.deleteRelease(id);
-
-			res.status(204).end();
+			await releaseService.deleteRelease(releaseId);
+			res.status(200).json({ message: 'Релиз успешно удален' });
 		} catch (error: any) {
-			console.error('Ошибка при удалении релиза:', error);
-
-			if (error.message?.includes('не найден')) {
-				res.status(404).json({ error: error.message });
-				return;
-			}
-
-			res.status(500).json({ error: 'Не удалось удалить релиз' });
+			res.status(500).json({ error: error.message });
 		}
-	},
+	}
 
-	// Получение всех игроков релиза
-	async getReleasePlayers(req: Request, res: Response): Promise<void> {
+	// Получение игроков релиза
+	async getReleasePlayers(req: Request, res: Response) {
 		try {
 			const releaseId = parseInt(req.params.id);
 
-			if (isNaN(releaseId)) {
-				res.status(400).json({ error: 'ID релиза должен быть числом' });
-				return;
-			}
-
 			const players = await releaseService.getReleasePlayers(releaseId);
-
 			res.status(200).json(players);
 		} catch (error: any) {
-			console.error('Ошибка при получении игроков релиза:', error);
-
-			if (error.message?.includes('не найден')) {
-				res.status(404).json({ error: error.message });
-				return;
-			}
-
-			res.status(500).json({ error: 'Не удалось получить игроков релиза' });
+			res.status(500).json({ error: error.message });
 		}
-	},
-};
+	}
+}
+
+export const releaseController = new ReleaseController();

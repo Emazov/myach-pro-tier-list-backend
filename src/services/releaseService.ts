@@ -1,17 +1,26 @@
 import prisma from '../database/prisma';
-import { fileService } from './fileService';
+import { storageService, StoredFile } from './storageService';
 
 // Интерфейсы для типизации данных
 export interface CreateReleaseDto {
 	name: string;
 	description?: string;
-	logoFileId?: number;
+	logo?: {
+		buffer: Buffer;
+		originalname: string;
+		mimetype: string;
+	};
 }
 
 export interface UpdateReleaseDto {
 	name?: string;
 	description?: string;
-	logoFileId?: number;
+	logo?: {
+		buffer: Buffer;
+		originalname: string;
+		mimetype: string;
+	};
+	removeLogo?: boolean;
 }
 
 export interface ReleaseWithLogo {
@@ -29,7 +38,6 @@ class ReleaseService {
 	async getAllReleases(): Promise<ReleaseWithLogo[]> {
 		const releases = await prisma.release.findMany({
 			include: {
-				logoFile: true,
 				_count: {
 					select: { players: true },
 				},
@@ -42,8 +50,8 @@ class ReleaseService {
 			releases.map(async (release) => {
 				let logoUrl: string | undefined = undefined;
 
-				if (release.logoFile) {
-					logoUrl = await fileService.getFileUrl(release.logoFile.key);
+				if (release.logoKey) {
+					logoUrl = await storageService.getFileUrl(release.logoKey);
 				}
 
 				return {
@@ -64,7 +72,6 @@ class ReleaseService {
 		const release = await prisma.release.findUnique({
 			where: { id },
 			include: {
-				logoFile: true,
 				_count: {
 					select: { players: true },
 				},
@@ -77,8 +84,8 @@ class ReleaseService {
 
 		let logoUrl: string | undefined = undefined;
 
-		if (release.logoFile) {
-			logoUrl = await fileService.getFileUrl(release.logoFile.key);
+		if (release.logoKey) {
+			logoUrl = await storageService.getFileUrl(release.logoKey);
 		}
 
 		return {
@@ -94,17 +101,17 @@ class ReleaseService {
 
 	// Создание нового релиза
 	async createRelease(data: CreateReleaseDto): Promise<ReleaseWithLogo> {
-		const { name, description, logoFileId } = data;
+		const { name, description, logo } = data;
 
-		// Проверяем существование файла логотипа если он указан
-		if (logoFileId) {
-			const fileExists = await prisma.file.findUnique({
-				where: { id: logoFileId },
-			});
+		// Загружаем логотип если есть
+		let storedLogo: StoredFile | undefined;
 
-			if (!fileExists) {
-				throw new Error(`Файл с ID ${logoFileId} не найден`);
-			}
+		if (logo) {
+			storedLogo = await storageService.uploadFile(
+				logo.buffer,
+				logo.originalname,
+				logo.mimetype,
+			);
 		}
 
 		// Создаем релиз
@@ -112,25 +119,18 @@ class ReleaseService {
 			data: {
 				name,
 				description,
-				...(logoFileId && {
-					logoFile: {
-						connect: { id: logoFileId },
-					},
+				...(storedLogo && {
+					logoKey: storedLogo.key,
+					logoFilename: storedLogo.filename,
+					logoContentType: storedLogo.contentType,
 				}),
 			},
 			include: {
-				logoFile: true,
 				_count: {
 					select: { players: true },
 				},
 			},
 		});
-
-		let logoUrl: string | undefined = undefined;
-
-		if (release.logoFile) {
-			logoUrl = await fileService.getFileUrl(release.logoFile.key);
-		}
 
 		return {
 			id: release.id,
@@ -138,7 +138,7 @@ class ReleaseService {
 			description: release.description,
 			createdAt: release.createdAt,
 			updatedAt: release.updatedAt,
-			logoUrl,
+			logoUrl: storedLogo?.url,
 			playersCount: release._count.players,
 		};
 	}
@@ -148,7 +148,7 @@ class ReleaseService {
 		id: number,
 		data: UpdateReleaseDto,
 	): Promise<ReleaseWithLogo> {
-		const { name, description, logoFileId } = data;
+		const { name, description, logo, removeLogo } = data;
 
 		// Проверяем существование релиза
 		const releaseExists = await prisma.release.findUnique({
@@ -159,15 +159,25 @@ class ReleaseService {
 			throw new Error(`Релиз с ID ${id} не найден`);
 		}
 
-		// Проверяем существование файла логотипа если он указан
-		if (logoFileId) {
-			const fileExists = await prisma.file.findUnique({
-				where: { id: logoFileId },
-			});
+		// Загружаем новый логотип если есть
+		let storedLogo: StoredFile | undefined;
 
-			if (!fileExists) {
-				throw new Error(`Файл с ID ${logoFileId} не найден`);
+		if (logo) {
+			storedLogo = await storageService.uploadFile(
+				logo.buffer,
+				logo.originalname,
+				logo.mimetype,
+			);
+
+			// Удаляем старый логотип
+			if (releaseExists.logoKey) {
+				await storageService.deleteFile(releaseExists.logoKey);
 			}
+		}
+
+		// Если нужно удалить логотип и не загружать новый
+		if (removeLogo && !logo && releaseExists.logoKey) {
+			await storageService.deleteFile(releaseExists.logoKey);
 		}
 
 		// Обновляем релиз
@@ -176,14 +186,19 @@ class ReleaseService {
 			data: {
 				...(name !== undefined && { name }),
 				...(description !== undefined && { description }),
-				...(logoFileId !== undefined && {
-					logoFile: {
-						connect: { id: logoFileId },
-					},
+				...(removeLogo &&
+					!storedLogo && {
+						logoKey: null,
+						logoFilename: null,
+						logoContentType: null,
+					}),
+				...(storedLogo && {
+					logoKey: storedLogo.key,
+					logoFilename: storedLogo.filename,
+					logoContentType: storedLogo.contentType,
 				}),
 			},
 			include: {
-				logoFile: true,
 				_count: {
 					select: { players: true },
 				},
@@ -192,8 +207,8 @@ class ReleaseService {
 
 		let logoUrl: string | undefined = undefined;
 
-		if (release.logoFile) {
-			logoUrl = await fileService.getFileUrl(release.logoFile.key);
+		if (release.logoKey) {
+			logoUrl = await storageService.getFileUrl(release.logoKey);
 		}
 
 		return {
@@ -221,8 +236,20 @@ class ReleaseService {
 			throw new Error(`Релиз с ID ${id} не найден`);
 		}
 
-		// Удаляем всех игроков этого релиза
+		// Удаляем логотип если есть
+		if (releaseExists.logoKey) {
+			await storageService.deleteFile(releaseExists.logoKey);
+		}
+
+		// Удаляем фотографии всех игроков
 		if (releaseExists.players.length > 0) {
+			for (const player of releaseExists.players) {
+				if (player.photoKey) {
+					await storageService.deleteFile(player.photoKey);
+				}
+			}
+
+			// Удаляем всех игроков этого релиза
 			await prisma.player.deleteMany({
 				where: {
 					releaseId: id,
@@ -249,9 +276,6 @@ class ReleaseService {
 
 		const players = await prisma.player.findMany({
 			where: { releaseId },
-			include: {
-				photoFile: true,
-			},
 			orderBy: { number: 'asc' },
 		});
 
@@ -260,8 +284,8 @@ class ReleaseService {
 			players.map(async (player) => {
 				let photoUrl: string | undefined = undefined;
 
-				if (player.photoFile) {
-					photoUrl = await fileService.getFileUrl(player.photoFile.key);
+				if (player.photoKey) {
+					photoUrl = await storageService.getFileUrl(player.photoKey);
 				}
 
 				return {

@@ -9,8 +9,8 @@ import telegramService from './services/telegramService';
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 3000;
-const appUrl = process.env.APP_URL || `http://localhost:${port}`;
+const PORT = process.env.PORT || 3500;
+const appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
 
 // Middleware
 app.use(cors());
@@ -24,8 +24,8 @@ app.use('/api', routes);
 app.use(errorHandler);
 
 // Запуск сервера
-const server = app.listen(port, () => {
-	console.log(`Сервер запущен на порту ${port}`);
+const server = app.listen(PORT, () => {
+	console.log(`Сервер запущен на порту ${PORT}`);
 
 	// Инициализация Telegram бота
 	try {

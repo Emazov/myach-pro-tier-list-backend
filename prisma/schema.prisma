@@ -18,45 +18,20 @@ model TelegramUser {
     createdAt  DateTime @default(now()) @map("created_at")
     updatedAt  DateTime @updatedAt @map("updated_at")
 
-    files File[] @relation("TelegramUserFiles")
-
     @@map("telegram_users")
-}
-
-// Модель файла
-model File {
-    id          Int      @id @default(autoincrement())
-    key         String   @unique
-    filename    String
-    contentType String   @map("content_type")
-    size        Int?
-    createdAt   DateTime @default(now()) @map("created_at")
-    updatedAt   DateTime @updatedAt @map("updated_at")
-    description String?  @map("description")
-
-    telegramUserId Int?          @map("telegram_user_id")
-    telegramUser   TelegramUser? @relation("TelegramUserFiles", fields: [telegramUserId], references: [id])
-
-    // Связи с релизами и игроками
-    releaseLogoId Int?     @unique @map("release_logo_id")
-    release       Release? @relation("ReleaseLogo", fields: [releaseLogoId], references: [id])
-
-    playerPhotoId Int?    @unique @map("player_photo_id")
-    player        Player? @relation("PlayerPhoto", fields: [playerPhotoId], references: [id])
-
-    @@map("files")
 }
 
 // Модель выпуска (релиза)
 model Release {
     id          Int      @id @default(autoincrement())
     name        String
-    description String?
     createdAt   DateTime @default(now()) @map("created_at")
     updatedAt   DateTime @updatedAt @map("updated_at")
 
-    // Логотип клуба
-    logoFile File? @relation("ReleaseLogo")
+    // Информация о логотипе
+    logoKey         String? @map("logo_key")
+    logoFilename    String? @map("logo_filename")
+    logoContentType String? @map("logo_content_type")
 
     // Связь с игроками
     players Player[]
@@ -68,9 +43,6 @@ model Release {
 model Player {
     id          Int      @id @default(autoincrement())
     name        String
-    position    String?
-    number      Int?
-    description String?
     createdAt   DateTime @default(now()) @map("created_at")
     updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -78,8 +50,10 @@ model Player {
     releaseId Int     @map("release_id")
     release   Release @relation(fields: [releaseId], references: [id])
 
-    // Связь с фотографией
-    photoFile File? @relation("PlayerPhoto")
+    // Информация о фотографии
+    photoKey         String? @map("photo_key")
+    photoFilename    String? @map("photo_filename")
+    photoContentType String? @map("photo_content_type")
 
     @@map("players")
 }

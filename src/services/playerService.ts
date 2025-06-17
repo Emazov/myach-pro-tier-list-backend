@@ -1,251 +1,256 @@
 import prisma from '../database/prisma';
-import { fileService } from './fileService';
+import { storageService, StoredFile } from './storageService';
 
 // Интерфейсы для типизации данных
 export interface CreatePlayerDto {
-  name: string;
-  position?: string;
-  number?: number;
-  description?: string;
-  photoFileId?: number;
-  releaseId: number;
+	name: string;
+	position?: string;
+	number?: number;
+	description?: string;
+	releaseId: number;
+	photo?: {
+		buffer: Buffer;
+		originalname: string;
+		mimetype: string;
+	};
 }
 
 export interface UpdatePlayerDto {
-  name?: string;
-  position?: string;
-  number?: number;
-  description?: string;
-  photoFileId?: number;
+	name?: string;
+	position?: string;
+	number?: number;
+	description?: string;
+	photo?: {
+		buffer: Buffer;
+		originalname: string;
+		mimetype: string;
+	};
+	removePhoto?: boolean;
 }
 
 export interface PlayerWithPhoto {
-  id: number;
-  name: string;
-  position: string | null;
-  number: number | null;
-  description: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  releaseId: number;
-  photoUrl?: string;
+	id: number;
+	name: string;
+	position: string | null;
+	number: number | null;
+	description: string | null;
+	releaseId: number;
+	createdAt: Date;
+	updatedAt: Date;
+	photoUrl?: string;
 }
 
 class PlayerService {
-  // Получение всех игроков с фотографиями
-  async getAllPlayers(): Promise<PlayerWithPhoto[]> {
-    const players = await prisma.player.findMany({
-      include: {
-        photoFile: true,
-      },
-      orderBy: { releaseId: 'desc' }
-    });
+	// Получение всех игроков
+	async getAllPlayers(): Promise<PlayerWithPhoto[]> {
+		const players = await prisma.player.findMany({
+			orderBy: { releaseId: 'asc' },
+		});
 
-    // Формируем URL для фотографий
-    return Promise.all(players.map(async player => {
-      let photoUrl: string | undefined = undefined;
-      
-      if (player.photoFile) {
-        photoUrl = await fileService.getFileUrl(player.photoFile.key);
-      }
-      
-      return {
-        id: player.id,
-        name: player.name,
-        position: player.position,
-        number: player.number,
-        description: player.description,
-        createdAt: player.createdAt,
-        updatedAt: player.updatedAt,
-        releaseId: player.releaseId,
-        photoUrl
-      };
-    }));
-  }
+		return Promise.all(
+			players.map(async (player) => {
+				let photoUrl: string | undefined = undefined;
 
-  // Получение игрока по ID
-  async getPlayerById(id: number): Promise<PlayerWithPhoto | null> {
-    const player = await prisma.player.findUnique({
-      where: { id },
-      include: {
-        photoFile: true
-      }
-    });
+				if (player.photoKey) {
+					photoUrl = await storageService.getFileUrl(player.photoKey);
+				}
 
-    if (!player) {
-      return null;
-    }
+				return {
+					id: player.id,
+					name: player.name,
+					position: player.position,
+					number: player.number,
+					description: player.description,
+					releaseId: player.releaseId,
+					createdAt: player.createdAt,
+					updatedAt: player.updatedAt,
+					photoUrl,
+				};
+			}),
+		);
+	}
 
-    let photoUrl: string | undefined = undefined;
-    
-    if (player.photoFile) {
-      photoUrl = await fileService.getFileUrl(player.photoFile.key);
-    }
+	// Получение игрока по ID
+	async getPlayerById(id: number): Promise<PlayerWithPhoto | null> {
+		const player = await prisma.player.findUnique({
+			where: { id },
+		});
 
-    return {
-      id: player.id,
-      name: player.name,
-      position: player.position,
-      number: player.number,
-      description: player.description,
-      createdAt: player.createdAt,
-      updatedAt: player.updatedAt,
-      releaseId: player.releaseId,
-      photoUrl
-    };
-  }
+		if (!player) {
+			return null;
+		}
 
-  // Создание нового игрока
-  async createPlayer(data: CreatePlayerDto): Promise<PlayerWithPhoto> {
-    const { name, position, number, description, photoFileId, releaseId } = data;
+		let photoUrl: string | undefined = undefined;
 
-    // Проверяем существование релиза
-    const releaseExists = await prisma.release.findUnique({
-      where: { id: releaseId }
-    });
+		if (player.photoKey) {
+			photoUrl = await storageService.getFileUrl(player.photoKey);
+		}
 
-    if (!releaseExists) {
-      throw new Error(`Релиз с ID ${releaseId} не найден`);
-    }
+		return {
+			id: player.id,
+			name: player.name,
+			position: player.position,
+			number: player.number,
+			description: player.description,
+			releaseId: player.releaseId,
+			createdAt: player.createdAt,
+			updatedAt: player.updatedAt,
+			photoUrl,
+		};
+	}
 
-    // Проверяем количество игроков в релизе
-    const playersCount = await prisma.player.count({
-      where: { releaseId }
-    });
+	// Создание нового игрока
+	async createPlayer(data: CreatePlayerDto): Promise<PlayerWithPhoto> {
+		const { name, position, number, description, releaseId, photo } = data;
 
-    if (playersCount >= 20) {
-      throw new Error(`В релизе уже максимальное количество игроков (20)`);
-    }
+		// Проверяем существование релиза
+		const releaseExists = await prisma.release.findUnique({
+			where: { id: releaseId },
+		});
 
-    // Проверяем существование фото если оно указано
-    if (photoFileId) {
-      const fileExists = await prisma.file.findUnique({
-        where: { id: photoFileId }
-      });
+		if (!releaseExists) {
+			throw new Error(`Релиз с ID ${releaseId} не найден`);
+		}
 
-      if (!fileExists) {
-        throw new Error(`Файл с ID ${photoFileId} не найден`);
-      }
-    }
+		// Загружаем фотографию если есть
+		let storedPhoto: StoredFile | undefined;
 
-    // Создаем игрока
-    const player = await prisma.player.create({
-      data: {
-        name,
-        position,
-        number,
-        description,
-        release: {
-          connect: { id: releaseId }
-        },
-        ...(photoFileId && {
-          photoFile: {
-            connect: { id: photoFileId }
-          }
-        })
-      },
-      include: {
-        photoFile: true
-      }
-    });
+		if (photo) {
+			storedPhoto = await storageService.uploadFile(
+				photo.buffer,
+				photo.originalname,
+				photo.mimetype,
+			);
+		}
 
-    let photoUrl: string | undefined = undefined;
-    
-    if (player.photoFile) {
-      photoUrl = await fileService.getFileUrl(player.photoFile.key);
-    }
+		// Создаем игрока
+		const player = await prisma.player.create({
+			data: {
+				name,
+				position,
+				number,
+				description,
+				releaseId,
+				...(storedPhoto && {
+					photoKey: storedPhoto.key,
+					photoFilename: storedPhoto.filename,
+					photoContentType: storedPhoto.contentType,
+				}),
+			},
+		});
 
-    return {
-      id: player.id,
-      name: player.name,
-      position: player.position,
-      number: player.number,
-      description: player.description,
-      createdAt: player.createdAt,
-      updatedAt: player.updatedAt,
-      releaseId: player.releaseId,
-      photoUrl
-    };
-  }
+		return {
+			id: player.id,
+			name: player.name,
+			position: player.position,
+			number: player.number,
+			description: player.description,
+			releaseId: player.releaseId,
+			createdAt: player.createdAt,
+			updatedAt: player.updatedAt,
+			photoUrl: storedPhoto?.url,
+		};
+	}
 
-  // Обновление игрока
-  async updatePlayer(id: number, data: UpdatePlayerDto): Promise<PlayerWithPhoto> {
-    const { name, position, number, description, photoFileId } = data;
+	// Обновление игрока
+	async updatePlayer(
+		id: number,
+		data: UpdatePlayerDto,
+	): Promise<PlayerWithPhoto> {
+		const { name, position, number, description, photo, removePhoto } = data;
 
-    // Проверяем существование игрока
-    const playerExists = await prisma.player.findUnique({
-      where: { id }
-    });
+		// Проверяем существование игрока
+		const playerExists = await prisma.player.findUnique({
+			where: { id },
+		});
 
-    if (!playerExists) {
-      throw new Error(`Игрок с ID ${id} не найден`);
-    }
+		if (!playerExists) {
+			throw new Error(`Игрок с ID ${id} не найден`);
+		}
 
-    // Проверяем существование фото если оно указано
-    if (photoFileId) {
-      const fileExists = await prisma.file.findUnique({
-        where: { id: photoFileId }
-      });
+		// Загружаем новую фотографию если есть
+		let storedPhoto: StoredFile | undefined;
 
-      if (!fileExists) {
-        throw new Error(`Файл с ID ${photoFileId} не найден`);
-      }
-    }
+		if (photo) {
+			storedPhoto = await storageService.uploadFile(
+				photo.buffer,
+				photo.originalname,
+				photo.mimetype,
+			);
 
-    // Обновляем игрока
-    const player = await prisma.player.update({
-      where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(position !== undefined && { position }),
-        ...(number !== undefined && { number }),
-        ...(description !== undefined && { description }),
-        ...(photoFileId !== undefined && {
-          photoFile: {
-            connect: { id: photoFileId }
-          }
-        })
-      },
-      include: {
-        photoFile: true
-      }
-    });
+			// Удаляем старую фотографию
+			if (playerExists.photoKey) {
+				await storageService.deleteFile(playerExists.photoKey);
+			}
+		}
 
-    let photoUrl: string | undefined = undefined;
-    
-    if (player.photoFile) {
-      photoUrl = await fileService.getFileUrl(player.photoFile.key);
-    }
+		// Если нужно удалить фотографию и не загружать новую
+		if (removePhoto && !photo && playerExists.photoKey) {
+			await storageService.deleteFile(playerExists.photoKey);
+		}
 
-    return {
-      id: player.id,
-      name: player.name,
-      position: player.position,
-      number: player.number,
-      description: player.description,
-      createdAt: player.createdAt,
-      updatedAt: player.updatedAt,
-      releaseId: player.releaseId,
-      photoUrl
-    };
-  }
+		// Обновляем игрока
+		const player = await prisma.player.update({
+			where: { id },
+			data: {
+				...(name !== undefined && { name }),
+				...(position !== undefined && { position }),
+				...(number !== undefined && { number }),
+				...(description !== undefined && { description }),
+				...(removePhoto &&
+					!storedPhoto && {
+						photoKey: null,
+						photoFilename: null,
+						photoContentType: null,
+					}),
+				...(storedPhoto && {
+					photoKey: storedPhoto.key,
+					photoFilename: storedPhoto.filename,
+					photoContentType: storedPhoto.contentType,
+				}),
+			},
+		});
 
-  // Удаление игрока
-  async deletePlayer(id: number): Promise<void> {
-    // Проверяем существование игрока
-    const playerExists = await prisma.player.findUnique({
-      where: { id }
-    });
+		let photoUrl: string | undefined = undefined;
 
-    if (!playerExists) {
-      throw new Error(`Игрок с ID ${id} не найден`);
-    }
+		if (player.photoKey) {
+			photoUrl = await storageService.getFileUrl(player.photoKey);
+		}
 
-    // Удаляем игрока
-    await prisma.player.delete({
-      where: { id }
-    });
-  }
+		return {
+			id: player.id,
+			name: player.name,
+			position: player.position,
+			number: player.number,
+			description: player.description,
+			releaseId: player.releaseId,
+			createdAt: player.createdAt,
+			updatedAt: player.updatedAt,
+			photoUrl,
+		};
+	}
+
+	// Удаление игрока
+	async deletePlayer(id: number): Promise<void> {
+		// Проверяем существование игрока
+		const playerExists = await prisma.player.findUnique({
+			where: { id },
+		});
+
+		if (!playerExists) {
+			throw new Error(`Игрок с ID ${id} не найден`);
+		}
+
+		// Удаляем фотографию если есть
+		if (playerExists.photoKey) {
+			await storageService.deleteFile(playerExists.photoKey);
+		}
+
+		// Удаляем игрока
+		await prisma.player.delete({
+			where: { id },
+		});
+	}
 }
 
-export const playerService = new PlayerService(); 
+export const playerService = new PlayerService();

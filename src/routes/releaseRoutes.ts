@@ -1,7 +1,10 @@
-import express from 'express';
+import { Router } from 'express';
+import multer from 'multer';
 import { releaseController } from '../controllers/releaseController';
 
-const router = express.Router();
+const router = Router();
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
 // Получение всех релизов
 router.get('/', releaseController.getAllReleases);
@@ -12,13 +15,13 @@ router.get('/:id', releaseController.getReleaseById);
 // Получение всех игроков релиза
 router.get('/:id/players', releaseController.getReleasePlayers);
 
-// Создание нового релиза (только для админа)
-router.post('/', releaseController.createRelease);
+// Создание нового релиза (с возможностью загрузки логотипа)
+router.post('/', upload.single('logo'), releaseController.createRelease);
 
-// Обновление релиза (только для админа)
-router.put('/:id', releaseController.updateRelease);
+// Обновление релиза (с возможностью загрузки логотипа)
+router.put('/:id', upload.single('logo'), releaseController.updateRelease);
 
-// Удаление релиза (только для админа)
+// Удаление релиза
 router.delete('/:id', releaseController.deleteRelease);
 
 export default router;
