@@ -81,24 +81,17 @@ class TelegramService {
 				await prisma.telegramUser.create({
 					data: {
 						telegramId: BigInt(from.id),
-						username: from.username || null,
-						firstName: from.first_name || null,
-						lastName: from.last_name || null,
 					},
 				});
 
 				// todo: убрать консоль
-				console.log(
-					`Новый пользователь Telegram сохранен: ${from.username || from.id}`,
-				);
+				console.log(`Новый пользователь Telegram сохранен: ${from.id}`);
 			}
 
 			// Отправка приветственного сообщения
 			await this.bot.sendMessage(
 				from.id,
-				`Привет, ${
-					from.first_name || 'пользователь'
-				}! 👋\nДобро пожаловать в наш бот.`,
+				`Привет! 👋\nДобро пожаловать в наш бот.`,
 			);
 		} catch (error) {
 			console.error('Ошибка при обработке команды /start:', error);
