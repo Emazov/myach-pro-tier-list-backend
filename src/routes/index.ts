@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import userRoutes from './userRoutes';
 import telegramRoutes from './telegramRoutes';
+import fileRoutes from './fileRoutes';
 
 const router = Router();
 
@@ -14,5 +15,8 @@ router.use('/users', userRoutes);
 
 // Маршруты Telegram
 router.use('/telegram', telegramRoutes);
+
+// Маршруты для файлов
+router.use('/files', fileRoutes);
 
 export default router;

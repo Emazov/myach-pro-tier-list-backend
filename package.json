@@ -15,11 +15,15 @@
 		"db:studio": "prisma studio"
 	},
 	"dependencies": {
+		"@aws-sdk/client-s3": "^3.830.0",
+		"@aws-sdk/s3-request-presigner": "^3.830.0",
 		"@prisma/client": "^6.9.0",
+		"@types/multer": "^1.4.13",
 		"@types/node-telegram-bot-api": "^0.64.9",
 		"cors": "^2.8.5",
 		"dotenv": "^16.5.0",
 		"express": "^4.21.2",
+		"multer": "^2.0.1",
 		"node-telegram-bot-api": "^0.66.0",
 		"prisma": "^6.9.0"
 	},

@@ -8,17 +8,6 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
-// Базовая модель пользователя
-model User {
-    id        Int      @id @default(autoincrement())
-    email     String   @unique
-    name      String?
-    createdAt DateTime @default(now()) @map("created_at")
-    updatedAt DateTime @updatedAt @map("updated_at")
-
-    @@map("users")
-}
-
 // Модель пользователя Telegram
 model TelegramUser {
     id         Int      @id @default(autoincrement())
@@ -29,5 +18,25 @@ model TelegramUser {
     createdAt  DateTime @default(now()) @map("created_at")
     updatedAt  DateTime @updatedAt @map("updated_at")
 
+    files File[] @relation("TelegramUserFiles")
+
     @@map("telegram_users")
+}
+
+// Модель файла
+model File {
+    id          Int      @id @default(autoincrement())
+    key         String   @unique
+    filename    String
+    contentType String   @map("content_type")
+    size        Int?
+    createdAt   DateTime @default(now()) @map("created_at")
+    updatedAt   DateTime @updatedAt @map("updated_at")
+
+    userId         Int? @map("user_id")
+    telegramUserId Int? @map("telegram_user_id")
+
+    telegramUser TelegramUser? @relation("TelegramUserFiles", fields: [telegramUserId], references: [id])
+
+    @@map("files")
 }
