@@ -1,9 +1,6 @@
 import prisma from '../database/prisma';
 
 export const userService = {
-	/**
-	 * Получить всех пользователей
-	 */
 	getAllUsers() {
 		return prisma.user.findMany({
 			select: {
@@ -15,9 +12,6 @@ export const userService = {
 		});
 	},
 
-	/**
-	 * Найти пользователя по ID
-	 */
 	getUserById(userId: number) {
 		return prisma.user.findUnique({
 			where: { id: userId },
@@ -30,9 +24,6 @@ export const userService = {
 		});
 	},
 
-	/**
-	 * Создать нового пользователя
-	 */
 	createUser(data: { email: string; name?: string; password: string }) {
 		return prisma.user.create({
 			data,
@@ -45,9 +36,6 @@ export const userService = {
 		});
 	},
 
-	/**
-	 * Обновить данные пользователя
-	 */
 	updateUser(userId: number, data: { name?: string; email?: string }) {
 		return prisma.user.update({
 			where: { id: userId },
@@ -61,9 +49,6 @@ export const userService = {
 		});
 	},
 
-	/**
-	 * Удалить пользователя
-	 */
 	deleteUser(userId: number) {
 		return prisma.user.delete({
 			where: { id: userId },

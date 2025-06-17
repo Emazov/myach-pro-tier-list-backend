@@ -2,9 +2,6 @@ import { Request, Response } from 'express';
 import { userService } from '../services/userService';
 
 export class UserController {
-	/**
-	 * Получить всех пользователей
-	 */
 	async getAllUsers(req: Request, res: Response) {
 		try {
 			const users = await userService.getAllUsers();
@@ -15,9 +12,6 @@ export class UserController {
 		}
 	}
 
-	/**
-	 * Получить пользователя по ID
-	 */
 	async getUserById(req: Request, res: Response) {
 		try {
 			const userId = parseInt(req.params.id);
@@ -34,9 +28,6 @@ export class UserController {
 		}
 	}
 
-	/**
-	 * Создать нового пользователя
-	 */
 	async createUser(req: Request, res: Response) {
 		try {
 			const { email, name, password } = req.body;
@@ -50,7 +41,6 @@ export class UserController {
 		} catch (error: any) {
 			console.error('Ошибка при создании пользователя:', error);
 
-			// Обработка ошибки дублирования email
 			if (error.code === 'P2002' && error.meta?.target?.includes('email')) {
 				return res
 					.status(400)
@@ -61,15 +51,11 @@ export class UserController {
 		}
 	}
 
-	/**
-	 * Обновить данные пользователя
-	 */
 	async updateUser(req: Request, res: Response) {
 		try {
 			const userId = parseInt(req.params.id);
 			const { name, email } = req.body;
 
-			// Проверка существует ли пользователь
 			const userExists = await userService.getUserById(userId);
 			if (!userExists) {
 				return res.status(404).json({ message: 'Пользователь не найден' });
@@ -80,7 +66,6 @@ export class UserController {
 		} catch (error: any) {
 			console.error('Ошибка при обновлении пользователя:', error);
 
-			// Обработка ошибки дублирования email
 			if (error.code === 'P2002' && error.meta?.target?.includes('email')) {
 				return res
 					.status(400)
@@ -91,14 +76,10 @@ export class UserController {
 		}
 	}
 
-	/**
-	 * Удалить пользователя
-	 */
 	async deleteUser(req: Request, res: Response) {
 		try {
 			const userId = parseInt(req.params.id);
 
-			// Проверка существует ли пользователь
 			const userExists = await userService.getUserById(userId);
 			if (!userExists) {
 				return res.status(404).json({ message: 'Пользователь не найден' });
@@ -113,5 +94,4 @@ export class UserController {
 	}
 }
 
-// Создаем и экспортируем экземпляр контроллера
 export const userController = new UserController();
