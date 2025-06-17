@@ -3,14 +3,14 @@ import { fileService } from '../services/fileService';
 
 export interface FileUploadRequest extends Request {
 	body: {
-		userId?: number | string;
 		telegramUserId?: number | string;
-		isAvatar?: boolean | string;
+		description?: string;
+		telegramId?: string | number;
 	};
 }
 
 export const fileController = {
-	// Загрузка файла
+	// Загрузка файла (только для администратора)
 	async uploadFile(req: FileUploadRequest, res: Response): Promise<void> {
 		try {
 			if (!req.file) {
@@ -19,25 +19,64 @@ export const fileController = {
 			}
 
 			const { originalname, mimetype, buffer } = req.file;
-			const { userId, telegramUserId, isAvatar } = req.body;
+			const { telegramUserId, description, telegramId } = req.body;
 
-			const uploadedFile = await fileService.uploadFile(
-				buffer,
-				originalname,
-				mimetype,
-				{
-					userId: userId ? parseInt(userId.toString()) : undefined,
-					telegramUserId: telegramUserId
-						? parseInt(telegramUserId.toString())
-						: undefined,
-					isAvatar: isAvatar === true || isAvatar === 'true',
-				},
-			);
+			if (!telegramId) {
+				res
+					.status(403)
+					.json({ error: 'Требуется идентификатор пользователя Telegram' });
+				return;
+			}
 
-			res.status(201).json(uploadedFile);
+			try {
+				const uploadedFile = await fileService.uploadFile(
+					buffer,
+					originalname,
+					mimetype,
+					{
+						telegramUserId: telegramUserId
+							? parseInt(telegramUserId.toString())
+							: undefined,
+						description: description?.toString(),
+					},
+					telegramId,
+				);
+
+				res.status(201).json(uploadedFile);
+			} catch (error: any) {
+				if (error.message === 'Недостаточно прав для загрузки файлов') {
+					res.status(403).json({ error: error.message });
+				} else {
+					throw error;
+				}
+			}
 		} catch (error) {
 			console.error('Ошибка при загрузке файла:', error);
 			res.status(500).json({ error: 'Не удалось загрузить файл' });
+		}
+	},
+
+	// Получение одиночного файла по ID
+	async getFileById(req: Request, res: Response): Promise<void> {
+		try {
+			const { id } = req.params;
+
+			if (!id) {
+				res.status(400).json({ error: 'ID файла не предоставлен' });
+				return;
+			}
+
+			const file = await fileService.getFileById(parseInt(id));
+
+			if (!file) {
+				res.status(404).json({ error: 'Файл не найден' });
+				return;
+			}
+
+			res.status(200).json(file);
+		} catch (error) {
+			console.error('Ошибка при получении файла:', error);
+			res.status(500).json({ error: 'Не удалось получить файл' });
 		}
 	},
 
@@ -80,66 +119,63 @@ export const fileController = {
 		}
 	},
 
-	// Удаление файла
+	// Удаление файла (только для администратора)
 	async deleteFile(req: Request, res: Response): Promise<void> {
 		try {
 			const { key } = req.params;
+			const { telegramId } = req.query;
 
 			if (!key) {
 				res.status(400).json({ error: 'Ключ файла не предоставлен' });
 				return;
 			}
 
-			await fileService.deleteFile(key);
+			if (!telegramId || Array.isArray(telegramId)) {
+				res
+					.status(403)
+					.json({ error: 'Требуется идентификатор пользователя Telegram' });
+				return;
+			}
 
-			res.status(200).json({ message: 'Файл успешно удален' });
+			try {
+				await fileService.deleteFile(key, telegramId.toString());
+				res.status(200).json({ message: 'Файл успешно удален' });
+			} catch (error: any) {
+				if (error.message === 'Недостаточно прав для удаления файлов') {
+					res.status(403).json({ error: error.message });
+				} else {
+					throw error;
+				}
+			}
 		} catch (error) {
 			console.error('Ошибка при удалении файла:', error);
 			res.status(500).json({ error: 'Не удалось удалить файл' });
 		}
 	},
 
-	// Получение списка файлов
+	// Получение списка файлов (все файлы - только для администратора)
 	async listFiles(req: Request, res: Response): Promise<void> {
 		try {
-			const { prefix, userId, telegramUserId } = req.query;
+			const { prefix, telegramUserId, telegramId } = req.query;
 
-			const files = await fileService.listFiles(
-				prefix as string | undefined,
-				userId ? parseInt(userId as string) : undefined,
-				telegramUserId ? parseInt(telegramUserId as string) : undefined,
-			);
+			try {
+				const files = await fileService.listFiles(
+					prefix as string | undefined,
+					telegramUserId ? parseInt(telegramUserId as string) : undefined,
+					telegramId ? telegramId.toString() : undefined,
+				);
 
-			res.status(200).json(files);
+				res.status(200).json(files);
+			} catch (error: any) {
+				if (error.message === 'Недостаточно прав для просмотра всех файлов') {
+					res.status(403).json({ error: error.message });
+				} else {
+					throw error;
+				}
+			}
 		} catch (error) {
 			console.error('Ошибка при получении списка файлов:', error);
 			res.status(500).json({ error: 'Не удалось получить список файлов' });
-		}
-	},
-
-	// Получение аватара пользователя
-	async getUserAvatar(req: Request, res: Response): Promise<void> {
-		try {
-			const { userId } = req.params;
-
-			if (!userId) {
-				res.status(400).json({ error: 'ID пользователя не предоставлен' });
-				return;
-			}
-
-			const avatar = await fileService.getUserAvatar(parseInt(userId));
-
-			if (!avatar) {
-				res.status(404).json({ error: 'Аватар не найден' });
-				return;
-			}
-
-			res.status(200).json(avatar);
-		} catch (error) {
-			console.error('Ошибка при получении аватара пользователя:', error);
-			res
-				.status(500)
-				.json({ error: 'Не удалось получить аватар пользователя' });
 		}
 	},
 

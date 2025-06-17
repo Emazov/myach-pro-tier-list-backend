@@ -3,40 +3,44 @@ import prisma from '../database/prisma';
 /**
  * Заполнение базы данных тестовыми данными
  */
-async function seed() {
-	try {
-		console.log('Начало заполнения базы данных...');
+async function main() {
+	console.log('🌱 Начало заполнения базы данных...');
 
-		// Очистка существующих данных
-		await prisma.user.deleteMany({});
+	// Очищаем таблицу перед заполнением
+	await prisma.file.deleteMany({});
+	await prisma.telegramUser.deleteMany({});
 
-		// Создание тестовых пользователей
-		const users = await Promise.all([
-			prisma.user.create({
-				data: {
-					email: 'admin@example.com',
-					name: 'Администратор',
-					// В реальном проекте можно добавить хеширование пароля, если модель будет обновлена
-				},
-			}),
-			prisma.user.create({
-				data: {
-					email: 'user@example.com',
-					name: 'Тестовый пользователь',
-					// В реальном проекте можно добавить хеширование пароля, если модель будет обновлена
-				},
-			}),
-		]);
+	console.log('Данные очищены');
 
-		console.log(`Создано ${users.length} пользователей`);
-		console.log('Заполнение базы данных завершено успешно');
-	} catch (error) {
-		console.error('Ошибка при заполнении базы данных:', error);
-		process.exit(1);
-	} finally {
-		await prisma.$disconnect();
-	}
+	// Создаем тестовых пользователей Telegram
+	const telegramUser1 = await prisma.telegramUser.create({
+		data: {
+			telegramId: BigInt(123456789),
+			username: 'test_user1',
+			firstName: 'Test',
+			lastName: 'User',
+		},
+	});
+
+	const telegramUser2 = await prisma.telegramUser.create({
+		data: {
+			telegramId: BigInt(987654321),
+			username: 'test_user2',
+			firstName: 'Demo',
+			lastName: 'Account',
+		},
+	});
+
+	console.log(`📝 Создано ${2} пользователей Telegram`);
+
+	console.log('✅ Заполнение базы данных успешно завершено!');
 }
 
-// Запускаем заполнение базы данных
-seed();
+main()
+	.catch((e) => {
+		console.error('❌ Ошибка при заполнении базы данных:', e);
+		process.exit(1);
+	})
+	.finally(async () => {
+		await prisma.$disconnect();
+	});

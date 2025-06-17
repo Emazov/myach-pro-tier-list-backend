@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import userRoutes from './userRoutes';
 import telegramRoutes from './telegramRoutes';
 import fileRoutes from './fileRoutes';
 
@@ -9,9 +8,6 @@ const router = Router();
 router.get('/health', (req, res) => {
 	res.status(200).json({ status: 'ok', message: 'API работает' });
 });
-
-// Маршруты пользователя
-router.use('/users', userRoutes);
 
 // Маршруты Telegram
 router.use('/telegram', telegramRoutes);
