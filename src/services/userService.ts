@@ -24,7 +24,7 @@ export const userService = {
 		});
 	},
 
-	createUser(data: { email: string; name?: string; password: string }) {
+	createUser(data: { email: string; name?: string }) {
 		return prisma.user.create({
 			data,
 			select: {

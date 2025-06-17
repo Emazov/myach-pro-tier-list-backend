@@ -28,9 +28,7 @@ const server = app.listen(port, () => {
 
 // Корректная обработка завершения работы
 process.on('SIGINT', async () => {
-	console.log(
-		'Получен сигнал завершения. Закрытие подключений к базе данных...',
-	);
+	console.log('Закрытие подключений к базе данных...');
 	await prisma.$disconnect();
 	server.close(() => {
 		console.log('Сервер остановлен');
@@ -39,9 +37,7 @@ process.on('SIGINT', async () => {
 });
 
 process.on('SIGTERM', async () => {
-	console.log(
-		'Получен сигнал завершения. Закрытие подключений к базе данных...',
-	);
+	console.log('Закрытие подключений к базе данных...');
 	await prisma.$disconnect();
 	server.close(() => {
 		console.log('Сервер остановлен');

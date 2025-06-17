@@ -30,13 +30,13 @@ export class UserController {
 
 	async createUser(req: Request, res: Response) {
 		try {
-			const { email, name, password } = req.body;
+			const { email, name } = req.body;
 
-			if (!email || !password) {
-				return res.status(400).json({ message: 'Email и пароль обязательны' });
+			if (!email) {
+				return res.status(400).json({ message: 'Email обязателен' });
 			}
 
-			const newUser = await userService.createUser({ email, name, password });
+			const newUser = await userService.createUser({ email, name });
 			res.status(201).json(newUser);
 		} catch (error: any) {
 			console.error('Ошибка при создании пользователя:', error);

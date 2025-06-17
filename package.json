@@ -8,6 +8,7 @@
 		"start": "node dist/index.js",
 		"dev": "ts-node-dev --respawn --transpile-only src/index.ts",
 		"lint": "eslint . --ext .ts",
+		"db:generate": "prisma generate",
 		"db:migrate": "prisma migrate dev",
 		"db:seed": "ts-node src/migrations/seed.ts",
 		"db:studio": "prisma studio"
